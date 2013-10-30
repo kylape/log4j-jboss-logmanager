@@ -12,6 +12,7 @@ import org.apache.log4j.spi.LoggingEvent;
 import org.jboss.logmanager.ExtHandler;
 import org.jboss.logmanager.ExtLogRecord;
 import org.jboss.logmanager.Logger;
+import org.jboss.logmanager.LogContext;
 
 /**
  * A handler that can be assigned {@link org.jboss.logmanager.Logger} that wraps an {@link Appender appender}.
@@ -25,8 +26,24 @@ import org.jboss.logmanager.Logger;
 final class JBossAppenderHandler extends ExtHandler {
 
     private static final org.jboss.logmanager.Logger.AttachmentKey<CopyOnWriteArrayList<Appender>> APPENDERS_KEY = new org.jboss.logmanager.Logger.AttachmentKey<CopyOnWriteArrayList<Appender>>();
+    private static final String ALWAYS_LOG_TO_SYS = "log4j.jboss.logmanager.always-log-to-system";
+    private static final boolean alwaysLogToSystemContext;
 
     private final Logger logger;
+
+    static {
+        boolean b = false;
+        try {
+            SecurityManager sm = System.getSecurityManager();
+            if (sm != null) {
+                sm.checkPropertyAccess(ALWAYS_LOG_TO_SYS);
+            }
+            String prop = System.getProperty(ALWAYS_LOG_TO_SYS);
+            b = prop != null && !prop.equals("false");
+        } catch (Exception e) {
+        }
+        alwaysLogToSystemContext = b;
+    }
 
     private JBossAppenderHandler(final Logger logger) {
         this.logger = logger;
@@ -41,6 +58,9 @@ final class JBossAppenderHandler extends ExtHandler {
             if (new JBossFilterWrapper(appender.getFilter(), true).isLoggable(record)) {
                 appender.doAppend(event);
             }
+        }
+        if (!logger.getLogContext().equals(LogContext.getSystemLogContext()) && alwaysLogToSystemContext) {
+            LogContext.getSystemLogContext().getLogger(record.getLoggerName()).log(record);
         }
     }
 
